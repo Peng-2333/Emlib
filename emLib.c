@@ -1,13 +1,13 @@
 /**
  * @file emLib.c
- * @author Peng (Peng2333)(Peng2333@vip.qq.com.com)
- * @authors Peng emmitt (Peng-22)(emmitt2333@qq.com)
+ * @author Peng (Peng2333@vip.qq.com.com)
+ * @authors Peng emmitt (emmitt2333@qq.com)
  *
  * @brief 一些常用的C函数
  * @version 0.3
  * @date 2020-09-01
  *
- * @encoding UTF-8
+ * @encoding GB2312
  *
  * @copyright Copyright (c) 2020
  *
@@ -18,7 +18,7 @@
 // C库
 #include "stdarg.h"
 
-#include "usart.h"
+// #include "usart.h"
 
 // 串口打印库暂时可以使用AC6编译器，但是无法使用gnu模式，只能是C99模式
 // 本意是为了不去重定义printf函数的。就算使用自己的printf，也需要引入这一段重定义，但是使用这一段之后，printf也可以用了
@@ -50,7 +50,8 @@ FILE __stdout;
 #else
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif
-PUTCHAR_PROTOTYPE
+
+KEYWORD_WEAK PUTCHAR_PROTOTYPE
 {
 	unsigned int TimeOut = 1000000;
 	USART_TypeDef *USARTx = USART_DEBUG_PROT;
@@ -59,7 +60,8 @@ PUTCHAR_PROTOTYPE
 	// serial_write(&serial1, (uint8_t)ch); //发送一个自己的数据到串口
 	//	HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, 1000);
 
-#if (defined STM32H743xx) // 目前这些型号只适配了遇见过的芯片，对于新芯片只需查看"USART_TypeDef"的定义即可
+// 目前这些型号只适配了遇见过的芯片，对于新芯片只需查看"USART_TypeDef"的定义即可
+#if (defined STM32H743xx) || (defined STM32F030)
 	while (((USARTx->ISR & 0X40) == 0) && --TimeOut)
 		;
 	USARTx->TDR = (uint8_t)ch;
@@ -70,10 +72,13 @@ PUTCHAR_PROTOTYPE
 #else
 #error "检查上面的设置，可能没有定义目前相关的芯片"
 #endif
-	if (TimeOut == 0 || (TimeOut + 1 == 0))	// 如果这个超时，多数情况就是初始化串口之前使用了打印函数
+	if (TimeOut == 0 || (TimeOut + 1 == 0)) // 如果这个超时，多数情况就是初始化串口之前使用了打印函数
 	{
 		while (1)
-			;
+		{
+			if (0)
+				break;
+		}
 	}
 
 	return ch;
@@ -82,12 +87,12 @@ PUTCHAR_PROTOTYPE
 // char Printf_buff[2048];
 
 /**
- * @brief 额，没有区别和sprintf
- * 
- * @param buf 
- * @param format 
- * @param ... 
- * @return int 
+ * @brief 功能上和sprintf没有区别
+ *
+ * @param buf
+ * @param format
+ * @param ...
+ * @return int
  */
 int Em_sprintf(char *buf, const char *format, ...)
 {
@@ -102,7 +107,17 @@ int Em_sprintf(char *buf, const char *format, ...)
 }
 
 // 返回发送的字符串长度，如果失败则返回-1
-__IO int USART_printf(USART_TypeDef *USARTx, char *format, ...)
+/**
+ * @brief
+ *
+ * @param USARTx
+ * @param format
+ * @param ...
+ * @return int
+ *
+ * @note 函数中设定最大只能发送1023个字符, 增大空间需要注意stack大小
+ */
+int USART_printf(USART_TypeDef *USARTx, char *format, ...)
 {
 	va_list args;
 	char Char_Buff[1024]; // 最多只能发送1023个字符,
@@ -118,14 +133,19 @@ __IO int USART_printf(USART_TypeDef *USARTx, char *format, ...)
 
 	while (*pStr != 0)
 	{
-#if (defined STM32H743xx) // 目前这些型号只适配了遇见过的芯片，对于新芯片只需查看"USART_TypeDef"的定义即可
+		pStr++;
+
+// 目前这些型号只适配了遇见过的芯片，对于新芯片只需查看"USART_TypeDef"的定义即可
+#if (defined STM32H743xx) || (defined STM32F030)
 		while (((USARTx->ISR & 0X40) == 0) && --TimeOut)
 			;
-		USARTx->TDR = (uint8_t)*pStr++;
-#elif (defined STM32F10X_HD) || (defined STM32F10X_MD) || (defined STM32F411xE)
+		USARTx->TDR = (uint8_t)*pStr;
+#elif (defined STM32F10X_HD) || (defined STM32F10X_MD) || (defined STM32F103xE) || (defined STM32F411xE) || (defined STM32F407xx) || (defined STM32F40_41xxx)
 		while (((USARTx->SR & 0X40) == 0) && --TimeOut)
 			; // 等待发送完成
-		USARTx->DR = (uint8_t)*pStr++;
+		USARTx->DR = (uint8_t)*pStr;
+#else
+#error "检查上面的设置，可能没有定义目前相关的芯片"
 #endif
 	}
 
@@ -145,11 +165,11 @@ __WEAK void assert_failed(uint8_t *file, uint32_t line)
 	 ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
 
 	/* Infinite loop */
-    Em_ERROR("Wrong parameters value: file %s on line %d\r\n", file, line);
+	Em_ERROR("Wrong parameters value: file %s on line %d\r\n", file, line);
 
-    // while (1)
-    // {
-    // }
+	while (1)
+	{
+	}
 }
 #endif
 
@@ -217,7 +237,7 @@ char *lookuplast(const char *source, char *str1, char *TargetArray)
 	memset(TargetArray, 0, strlen(TargetArray)); // 清空目标存储区域
 	if (strstr(source, str1) == NULL)
 	{ // 如果找不到str1，直接返回源数组
-		//  	printf("Don't find!\r\n");
+		//  	printf_Em("Don't find!\r\n");
 		memcpy(TargetArray, source, strlen(source));
 		return (char *)source;
 	}
@@ -385,14 +405,25 @@ void *Limit(double *Limit_Data, double Limit_)
 	return Limit_Data;
 }
 
-// 来自正点原子USMART实验*****************************************************
-// 读取指定地址的值
+/**
+ * @brief 读取指定地址的值
+ *
+ * @param addr
+ * @return uint32_t
+ */
 uint32_t read_addr(uint32_t addr) { return *(uint32_t *)addr; }
-// 在指定地址写入指定的值
+
+/**
+ * @brief 在指定地址写入指定的值
+ *
+ * @param addr
+ * @param val
+ */
 void write_addr(uint32_t addr, uint32_t val) { *(uint32_t *)addr = val; }
 
-/**	@brief
- *	@param __i 输入想要转二进制的值
+/**	
+ * @brief
+ * @param __i 输入想要转二进制的值
  * @param ptr 传入一个数组空间指针，长度必须大于32字节，用于显示32位的数据
  * @retval 返回值即生成的字符串的(头)指针，方便直接使用返回值打印，或者也可使用结构体中的成员
  *
@@ -437,3 +468,435 @@ char *int32_to_Binary(int32_to_Binary_TypeDef *Dataptr)
 	//	Em_INFOR("%s", Dataptr->Result_String);
 	return Dataptr->Result_String;
 }
+
+/* Systick ********************************************************************/
+
+/* 计时变量 */
+__IO uint64_t __Tick_ms = 0; // 计数毫秒值
+__IO uint64_t __Tick_us = 0; // 计数微秒值
+
+__IO uint64_t __Tick_us_TIM = 0; // 定时器计数使用的计数微秒值
+
+/* 配置变量 */					  // 下面这个有空解决一下
+const uint32_t __TickFreq = 1000; // 定时器溢出频率 (Hz)	// 1000 us一次
+uint32_t __TickInc_ms = 0;		  // 每次达到中断，ms计数变量的增量值，每次中断不足1 us，也将会被设置为1，但是不是每次中断都递增__Tick_ms
+uint32_t __TickInc_us = 0;		  // 每次达到中断，ms计数变量的增量值
+
+/**
+ * @brief 初始化Systick用于延时函数
+ *
+ * @note 加个前缀可以在键入"delay..."的时候编辑器不会第一个提示自动补全这个
+ *
+ */
+void em_delay_init(void)
+{
+	RCC_ClocksTypeDef RCC_ClocksTypeDefStructure = {0};
+	uint32_t SYSCLK_Frequency = 0;
+#if DEBUG_SYSCLOCK || 0
+	Em_INFOR("\r\n正在配置Systick:");
+#endif /* DEBUG_SYSCLOCK */
+
+	if (__TickFreq > 1000000)
+	{
+		Em_ERROR("__TickFreq = %d设置过大", __TickFreq);
+	}
+	else if (__TickFreq == 0)
+	{
+		Em_ERROR("__TickFreq = %d 值设置错误", __TickFreq);
+	}
+
+	/* 配置时钟 **********************/
+	SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK);
+
+	RCC_GetClocksFreq(&RCC_ClocksTypeDefStructure);
+	SYSCLK_Frequency = RCC_ClocksTypeDefStructure.SYSCLK_Frequency; // 取得时钟频率
+#if DEBUG_SYSCLOCK
+	Em_printf_var("%d", SYSCLK_Frequency, "");
+#endif /* DEBUG_SYSCLOCK */
+
+	/* 设置装载值 ********************/
+	SysTick->LOAD = ((SYSCLK_Frequency / (__TickFreq)) & SysTick_LOAD_RELOAD_Msk) - 1; /* set reload register */
+#if DEBUG_SYSCLOCK
+	Em_printf_var("%d", SysTick->LOAD, "");
+#endif /* DEBUG_SYSCLOCK */
+
+	/* 设置优先级 ********************/
+	NVIC_SetPriority(SysTick_IRQn, 0); // 最高优先级 		/* set Priority for Cortex-M0 System Interrupts */
+
+	SysTick->VAL = 0; /* 计数器值清0*/ /* Load the SysTick Counter Value */
+
+	__TickInc_us = (uint32_t)1000000 / __TickFreq; // 计算计数周期us的递增值
+#if DEBUG_SYSCLOCK
+	Em_printf_var("%d", __TickInc_us, "");
+#endif /* DEBUG_SYSCLOCK */
+
+	// 也就是每次递增值大于等于1 ms
+	if (__TickInc_us < 1000)
+		__TickInc_ms = 1;
+	else
+		__TickInc_ms = (uint32_t)1000 / __TickFreq;
+#if DEBUG_SYSCLOCK
+	Em_printf_var("%d", __TickInc_ms, "");
+#endif /* DEBUG_SYSCLOCK */
+
+	// __Tick_us = 0;
+	__Tick_ms = 0;
+	SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |
+					SysTick_CTRL_TICKINT_Msk | /* 开启Tick中断 */
+					SysTick_CTRL_ENABLE_Msk;   /* Enable SysTick IRQ and SysTick Timer */
+}
+
+/**
+ * @brief
+ *
+ * @note SysTick_Handler调用
+ */
+void SysTick_IncTick(void)
+{
+	static uint32_t IsIncMs = 0; // 虽然叫这个名字，但是这不一定是1ms，是设置递增的那个值，也许是10us，也许是500 us...
+	// static uint32_t Isprintf = 0;
+
+	IsIncMs++;							  // 递增，用于判断是否需要增加
+	if (IsIncMs >= (1000 / __TickInc_us)) // 注意，这个应该看看对不对
+	{
+		IsIncMs = 0;
+		__Tick_ms = __Tick_ms + __TickInc_ms;
+	}
+	__Tick_us = __Tick_us + __TickInc_us;
+
+	// // 秒测试，注意这是在中断里面
+	// if(++Isprintf >= ((1000 / __TickInc_us) * 1000))
+	// {
+	//     Isprintf = 0;
+	//     Em_printf_var("%lld", __Tick_us, "");
+	//     Em_printf_var("%lld", __Tick_ms, "");
+	//     printf_Em("\r\n");
+	// }
+}
+
+/**
+ * @brief  This function handles SysTick Handler.
+ * @param  None
+ * @retval None
+ *
+ * @attention 一般情况下，请在stm32f0xx_it.c中实现此函数
+ * 	stm32f0xx_it.c中定义了该函数但是没有填写相关内容，此处弱函数关键字会让此函数失效，导致延时函数无法运行。
+ * 	将下面函数在stm32f0xx_it.c中实现即可
+ */
+KEYWORD_WEAK void SysTick_Handler(void)
+{
+	SysTick_IncTick();
+}
+
+/** 时间查询函数
+ * @{
+ */
+
+/**
+ * @brief Get the Tick object
+ *
+ * @return uint64_t
+ * @note 此函数默认返回ms时刻
+ */
+uint64_t GetTick(void)
+{
+	return __Tick_ms;
+}
+
+/**
+ * @brief us查询
+ *
+ * @return uint64_t
+ */
+uint64_t GetTick_us(void) { return __Tick_us; }
+
+/**
+ * @brief ms查询，功能等同于默认情况下的 GetTick()
+ *
+ * @return uint64_t
+ */
+uint64_t GetTick_ms(void) { return __Tick_ms; }
+/** 时间查询函数 end
+ * @}
+ */
+
+/**
+ * @brief 毫秒延时函数
+ *
+ * @param ms
+ */
+void delay_ms(uint64_t ms)
+{
+	uint64_t tickstart = GetTick_ms();
+	__IO uint64_t ticknow = 0;
+
+	do
+	{
+		ticknow = GetTick_ms();
+	} while (((ticknow - tickstart) < ms) && (ticknow >= tickstart)); // 时间没达到而且现在时间比之前大。小的话可能变量溢出或者被清零了
+																	  //   后面的必须加上等号，CPU速度过快，有可能时间还没来得及改变
+}
+
+/**
+ * @brief 微秒延时函数
+ *
+ * @param us
+ *
+ * @attention 根据您设置的溢出频率，可能不能做到1 us这类型的超小延时，us级延时可以尝试使用软件延时，或者定时器的阻塞式延时
+ */
+void delay_us(uint64_t us)
+{
+	uint64_t tickstart = GetTick_us();
+	__IO uint64_t ticknow = 0;
+
+	do
+	{
+		ticknow = GetTick_us();
+	} while (((ticknow - tickstart) < us) && (ticknow >= tickstart)); // 时间没达到而且现在时间比之前大。小的话可能变量溢出或者被清零了
+																	  //   后面的必须加上等号，CPU速度过快，有可能时间还没来得及改变
+}
+
+/**
+ * @brief 硬件定时器进行us延时
+ *
+ * @param us
+ */
+// /*inline*/ void delay_us_TIM(uint64_t us)
+// {
+// 	uint64_t tickstart = GetTick_us_TIM();
+// 	__IO uint64_t ticknow = 0;
+
+// 	do
+// 	{
+// 		ticknow = GetTick_us_TIM();
+// 	} while (((ticknow - tickstart) < us) && (ticknow >= tickstart)); // 时间没达到而且现在时间比之前大。小的话可能变量溢出或者被清零了
+// 																	  //   后面的必须加上等号，有可能时间还没来得及改变
+// }
+
+/**
+ * @brief 用于软件微秒延时的常数
+ * 不是比例函数，以为函数调用，可能是一次函数啥的函数
+ */
+// double Constant_delay_us_Soft = 5.15;	//
+uint64_t Constant_delay_us_Soft = 3; //
+
+/**
+ * @brief
+ *
+ * @param us
+ *
+ * @note 当前在10 us延时在10.51us左右（包含函数调用时间）
+ *        1us 在 1.648 us左右（有函数调用时间，不准确，严重不准确）
+ * @attention 此函数只在F0 48MHz下测试了
+ */
+void delay_us_Soft(uint64_t us)
+{
+
+	//   static int64_t i = 0;
+	//   i = (int64_t)(Constant_delay_us_Soft * us);
+
+	if (us == 0) // 这个并不影响太多时间
+		return;
+
+	//   while(--us)
+	for (; us; --us)
+	{
+		++us;
+		--us;
+		++us;
+		--us;
+		++us;
+		--us;
+		++us;
+		--us;
+		++us;
+		--us;
+		++us;
+		--us;
+	}
+}
+
+void Test_delay_us_Soft(void)
+{
+	Em_INFOR("准备测试 , 当前tick = %lld ms", GetTick());
+	uint64_t StartTick = GetTick();
+
+	for (uint32_t i = 0; i < 5000 * 100; i++)
+	{
+		// ONEWIRE_DELAY(10);
+	}
+
+	uint64_t EndTick = GetTick();
+	Em_INFOR("运行完成, 共花费%lld ms [%lld ms -> %lld ms]",
+			 EndTick - StartTick, StartTick, EndTick);
+}
+
+/* Systick end ****************************************************************/
+
+/* 串口初始化函数 *******************************************************************************************************/
+/**
+ * @brief
+ *
+ * @param bound 波特率;
+ * 	@arg 0, 表示使用上一次的值; 如果第一次就使用0, 则使用默认的115200
+ */
+KEYWORD_WEAK void USART1_Init(uint32_t bound)
+{
+	GPIO_InitTypeDef GPIO_InitTypeStrue;
+	USART_InitTypeDef USART_InitStrue;
+	NVIC_InitTypeDef NVIC_InitStrue;
+
+	static uint32_t USART1_bound = 115200;
+	if (bound != 0)
+	{
+		USART1_bound = bound;
+	}
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART1, ENABLE);
+
+	// PA9-TX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_AF_PP; // 推推挽复用输出
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_9;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_Init(GPIOA, &GPIO_InitTypeStrue);
+
+	// PA10-RX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_10;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_10MHz;
+	GPIO_Init(GPIOA, &GPIO_InitTypeStrue);
+
+	// USART_Init()
+	USART_InitStrue.USART_BaudRate = USART1_bound;								// 波特率
+	USART_InitStrue.USART_HardwareFlowControl = USART_HardwareFlowControl_None; // 硬件流控制->不使用
+	USART_InitStrue.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;					// 发送和接受都使能
+	USART_InitStrue.USART_Parity = USART_Parity_No;								// 不用奇偶校验
+	USART_InitStrue.USART_StopBits = USART_StopBits_1;							// 1位停止位
+	USART_InitStrue.USART_WordLength = USART_WordLength_8b;						// 8位字长
+	USART_Init(USART1, &USART_InitStrue);										// 串口初始化
+
+	// 使用中断的话还得配置中断
+	USART_ITConfig(USART1, USART_IT_RXNE, ENABLE); // 接受缓冲区非空进入中断
+
+	// NVIC_Init()函数的参数
+	NVIC_InitStrue.NVIC_IRQChannel = USART1_IRQn;		  // 选择中断通道----通道在顶层头文件stm32f10x.h中，找IRQ的 317行
+	NVIC_InitStrue.NVIC_IRQChannelPreemptionPriority = 3; // 设置抢占优先级
+	NVIC_InitStrue.NVIC_IRQChannelSubPriority = 0;		  // 设置响应优先级
+	NVIC_InitStrue.NVIC_IRQChannelCmd = DISABLE;		  // IRQ通道使能
+	NVIC_Init(&NVIC_InitStrue);
+
+	USART_Cmd(USART1, ENABLE); // 串口函数使能
+}
+
+/**
+ * @brief
+ *
+ * @param bound 波特率;
+ * 	@arg 0, 表示使用上一次的值; 如果第一次就使用0, 则使用默认的115200
+ */
+KEYWORD_WEAK void USART2_Init(uint32_t bound)
+{
+	GPIO_InitTypeDef GPIO_InitTypeStrue;
+	USART_InitTypeDef USART_InitStrue;
+	NVIC_InitTypeDef NVIC_InitStrue;
+
+	static uint32_t USART2_bound = 115200;
+	if (bound != 0)
+	{
+		USART2_bound = bound;
+	}
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+
+	// PA2-TX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_AF_PP; // 推推挽复用输出
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_2;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitTypeStrue);
+
+	// PA3-RX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_3;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOA, &GPIO_InitTypeStrue);
+
+	// USART_Init()
+	USART_InitStrue.USART_BaudRate = USART2_bound;								// 波特率
+	USART_InitStrue.USART_HardwareFlowControl = USART_HardwareFlowControl_None; // 硬件流控制->不使用
+	USART_InitStrue.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;					// 发送和接受都使能
+	USART_InitStrue.USART_Parity = USART_Parity_No;								// 不用奇偶校验
+	USART_InitStrue.USART_StopBits = USART_StopBits_1;							// 1位停止位
+	USART_InitStrue.USART_WordLength = USART_WordLength_8b;						// 8位字长
+	USART_Init(USART2, &USART_InitStrue);										// 串口初始化
+
+	// 使用中断的话还得配置中断
+	USART_ITConfig(USART2, USART_IT_RXNE, ENABLE); // 接受缓冲区非空进入中断
+
+	// NVIC_Init()函数的参数
+	NVIC_InitStrue.NVIC_IRQChannel = USART2_IRQn;		  // 选择中断通道----通道在顶层头文件stm32f10x.h中，找IRQ的 317行
+	NVIC_InitStrue.NVIC_IRQChannelPreemptionPriority = 3; // 设置抢占优先级
+	NVIC_InitStrue.NVIC_IRQChannelSubPriority = 0;		  // 设置响应优先级
+	NVIC_InitStrue.NVIC_IRQChannelCmd = DISABLE;		  // IRQ通道使能
+	NVIC_Init(&NVIC_InitStrue);
+
+	USART_Cmd(USART2, ENABLE); // 串口函数使能
+}
+
+/**
+ * @brief
+ *
+ * @param bound 波特率;
+ * 	@arg 0, 表示使用上一次的值; 如果第一次就使用0, 则使用默认的115200
+ */
+KEYWORD_WEAK void USART3_Init(uint32_t bound)
+{
+	GPIO_InitTypeDef GPIO_InitTypeStrue;
+	USART_InitTypeDef USART_InitStrue;
+	NVIC_InitTypeDef NVIC_InitStrue;
+
+	static uint32_t USART3_bound = 115200;
+	if (bound != 0)
+	{
+		USART3_bound = bound;
+	}
+
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+
+	// PB10-TX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_AF_PP; // 推推挽复用输出
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_10;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitTypeStrue);
+
+	// PB11-RX
+	GPIO_InitTypeStrue.GPIO_Mode = GPIO_Mode_IN_FLOATING; // 浮空输入
+	GPIO_InitTypeStrue.GPIO_Pin = GPIO_Pin_11;
+	GPIO_InitTypeStrue.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(GPIOB, &GPIO_InitTypeStrue);
+
+	// USART_Init()
+	USART_InitStrue.USART_BaudRate = USART3_bound;								// 波特率
+	USART_InitStrue.USART_HardwareFlowControl = USART_HardwareFlowControl_None; // 硬件流控制->不使用
+	USART_InitStrue.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;					// 发送和接受都使能
+	USART_InitStrue.USART_Parity = USART_Parity_No;								// 不用奇偶校验
+	USART_InitStrue.USART_StopBits = USART_StopBits_1;							// 1位停止位
+	USART_InitStrue.USART_WordLength = USART_WordLength_8b;						// 8位字长
+	USART_Init(USART3, &USART_InitStrue);										// 串口初始化
+
+	// 使用中断的话还得配置中断
+	USART_ITConfig(USART3, USART_IT_RXNE, ENABLE); // 接受缓冲区非空进入中断
+
+	// NVIC_Init()函数的参数
+	NVIC_InitStrue.NVIC_IRQChannel = USART3_IRQn;		  // 选择中断通道----通道在顶层头文件stm32f10x.h中，找IRQ的 317行
+	NVIC_InitStrue.NVIC_IRQChannelPreemptionPriority = 3; // 设置抢占优先级
+	NVIC_InitStrue.NVIC_IRQChannelSubPriority = 0;		  // 设置响应优先级
+	NVIC_InitStrue.NVIC_IRQChannelCmd = DISABLE;		  // IRQ通道使能
+	NVIC_Init(&NVIC_InitStrue);
+
+	USART_Cmd(USART3, ENABLE); // 串口函数使能
+}
+
+/* 串口初始化函数 end ***************************************************************************************************/
